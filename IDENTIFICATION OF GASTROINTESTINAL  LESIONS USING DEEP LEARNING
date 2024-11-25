@@ -1,0 +1,91 @@
+%% Read Test Image 
+[filename,pathname] = uigetfile('*.jpg;*.tif;*.png;*.jpeg;*.bmp;*.pgm;*.gif','pick an 
+imgae'); 
+file = fullfile(pathname,filename); 
+I = imread(file); 
+figure, 
+imshow(I); 
+title('Test Image'); 
+%% Preprocessing 
+if size(I,3) == 3 
+I=I; 
+else 
+I=cat(3,I,I,I); 
+end 
+% Noise Removal 
+N1=medfilt2(I(:,:,1)); 
+N2=medfilt2(I(:,:,2)); 
+N3=medfilt2(I(:,:,3)); 
+I1=cat(3,N1,N2,N3); 
+figure,imshow(I1); 
+title('Noise Removed Image Using Median Filter'); 
+% Contrast Enhancement 
+R1 = adapthisteq(I1(:,:,1),'clipLimit',0.00002); 
+G1=adapthisteq(I1(:,:,2),'clipLimit',0.00002);  
+B1=adapthisteq(I1(:,:,3),'clipLimit',0.00002); 
+Img=cat(3,R1,G1,B1); 
+figure,imshow(Img); 
+title('Contrast Enhanced Image Using AHE'); 
+% Resizing 
+inputSize=[299 299 3]; 
+Img1 = imresize(Img,inputSize(1:2)); 
+figure,imshow(Img1); 
+title('Resized Image'); 
+%% Classification Using Inceptionv3 
+% Load Trained Model 
+load G_InceptionV3_Train 
+msgbox('Trained Network Model Was Loaded'); 
+% Classification 
+[YPred,scores] = classify(netTransfer,Img1); 
+figure, 
+imshow(Img1); 
+title('Classification Result Using InceptionV3 Model'); 
+text(10,30,YPred,'Color','r','fontname','Harlow Solid 
+Italic','FontWeight','bold','FontSize',16); 
+predicted_score=max(scores); 
+pause(1); 
+%% Performance Analysis 
+imds = imageDatastore('PA', ...  
+‘IncludeSubfolders',true, ... 
+'LabelSource','foldernames'); YTest=imds.Labels; 
+%% Load Trained Network Model 
+load G_InceptionV3_Train 
+L= netTransfer.Layers(1,1); 
+inputSize=L(1).InputSize; 
+augimdsValidation = augmentedImageDatastore(inputSize(1:2),imds); 
+%% Classification 
+[YPred,scores] = classify(netTransfer,augimdsValidation); 
+idx = randperm(numel(imds.Files)); 
+figure('name','Classification Results with Predicted Score'); 
+set(gcf, 'Units', 'Normalized', 'OuterPosition', [0 0 1 1]); 
+for i = 1:12 
+subplot(3,4,i) 
+I = readimage(imds,idx(i)); 
+imshow(I) 
+label = YPred(idx(i)); 
+title(string(label) + ", " + num2str(100*max(scores(idx(i),:)),3) + "%"); 
+end 
+figure, 
+plotconfusion(YTest,YPred) 
+pause(1); 
+[c_matrix,Result,RefereceResult]= confusionpre.getMatrix(uint8(YTest),uint8(YPred)); 
+Accuracy=Result.Accuracy; 
+Precision=Result.Precision; 
+Sensitivity=Result.Sensitivity; 
+F_score=Result.F1_score; 
+PM=[Accuracy Precision Sensitivity F_score]; 
+f = figure('name','Performance Analysis - InceptionV3','Position',[500 400 400 260]); 
+cnames = {'Performance in %'}; 
+rnames={'Accuracy','Precision','Sensitivity','F1_Score'}; 
+t = uitable('Parent',f,'Data',PM','ColumnName',cnames, 'RowName',rnames,... 
+'Position',[30 90 300 120]); 
+pause(1); 
+figure, 
+Z=[Accuracy Precision Sensitivity F_score]; 
+str={'Accuracy','Precision','Sensitivity','F1_Score'}; 
+bar(Z,0.25,'b'); 
+set(gca, 'XTickLabel',str, 'XTick',1:numel(str)); 
+ylabel('Detected Result(%)'); 
+title('Performance Analysis using InceptionV3'); 
+pause(1); 
+msgbox('Completed');
